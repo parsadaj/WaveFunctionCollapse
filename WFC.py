@@ -11,7 +11,7 @@ class NoWFCSolution(Exception):
         
         
 class WaveFunctionCollapse:
-    def __init__(self, input_image, pattern_size, grid_size=None, random_seed=None):
+    def __init__(self, input_image, pattern_size, grid_size=None, wrap_input=False, random_seed=None):
         if random_seed is not None:
             self.random_seed = random_seed
         else:
@@ -30,6 +30,12 @@ class WaveFunctionCollapse:
         self.output_grid = None
         self.possible_patterns = None
         self.observations = []
+        self.wrap = wrap_input
+        
+        self.nan_value = np.min(input_image) - 1
+        
+        self.extract_patterns()
+
         
 
     def generate_pattern_mappings(self):
@@ -48,36 +54,76 @@ class WaveFunctionCollapse:
             for x in range(width):
                 pattern = self.get_pattern(x, y)
                 # self.patterns.append(pattern)
-                self.pattern_frequencies[tuple(pattern.flatten())] += 1
+                if not self.nan_value in pattern:
+                    self.pattern_frequencies[tuple(pattern.flatten())] += 1
+
 
         self.patterns = self.pattern_frequencies.keys()  # Remove duplicates
         self.pattern_to_number, self.number_to_pattern = self.generate_pattern_mappings()
 
-        # Set up adjacency rules
-        for y in range(height):
-            for x in range(width):
-                pattern = self.get_pattern(x, y)
-                above_pattern = self.get_pattern(x, (y - 1) % height)
-                below_pattern = self.get_pattern(x, (y + 1) % height)
-                left_pattern = self.get_pattern((x - 1) % width, y)
-                right_pattern = self.get_pattern((x + 1) % width, y)
+        # # Set up adjacency rules
+        # for y in range(height):
+        #     for x in range(width):
+        #         pattern = self.get_pattern(x, y)
+        #         above_pattern = self.get_pattern(x, (y - 1) % height)
+        #         below_pattern = self.get_pattern(x, (y + 1) % height)
+        #         left_pattern = self.get_pattern((x - 1) % width, y)
+        #         right_pattern = self.get_pattern((x + 1) % width, y)
 
-                self.adjacency_rules[tuple(pattern.flatten())]['above'].add(tuple(above_pattern.flatten()))
-                self.adjacency_rules[tuple(pattern.flatten())]['below'].add(tuple(below_pattern.flatten()))
-                self.adjacency_rules[tuple(pattern.flatten())]['left'].add(tuple(left_pattern.flatten()))
-                self.adjacency_rules[tuple(pattern.flatten())]['right'].add(tuple(right_pattern.flatten()))
+        #         self.adjacency_rules[tuple(pattern.flatten())]['above'].add(tuple(above_pattern.flatten()))
+        #         self.adjacency_rules[tuple(pattern.flatten())]['below'].add(tuple(below_pattern.flatten()))
+        #         self.adjacency_rules[tuple(pattern.flatten())]['left'].add(tuple(left_pattern.flatten()))
+        #         self.adjacency_rules[tuple(pattern.flatten())]['right'].add(tuple(right_pattern.flatten()))
+
+    # Set up adjacency rules based on compatibility
+        for pattern1 in self.patterns:
+            for pattern2 in self.patterns:
+                # Check if pattern1 can be above pattern2
+                if np.array_equal(
+                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[-1, :], 
+                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[0, :]
+                ):
+                    self.adjacency_rules[pattern1]['below'].add(pattern2)
+                    self.adjacency_rules[pattern2]['above'].add(pattern1)
+
+                # Check if pattern1 can be below pattern2
+                if np.array_equal(
+                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[0, :], 
+                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[-1, :]
+                ):
+                    self.adjacency_rules[pattern1]['above'].add(pattern2)
+                    self.adjacency_rules[pattern2]['below'].add(pattern1)
+
+                # Check if pattern1 can be to the left of pattern2
+                if np.array_equal(
+                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[:, -1], 
+                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[:, 0]
+                ):
+                    self.adjacency_rules[pattern1]['right'].add(pattern2)
+                    self.adjacency_rules[pattern2]['left'].add(pattern1)
+
+                # Check if pattern1 can be to the right of pattern2
+                if np.array_equal(
+                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[:, 0], 
+                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[:, -1]
+                ):
+                    self.adjacency_rules[pattern1]['left'].add(pattern2)
+                    self.adjacency_rules[pattern2]['right'].add(pattern1)
+
 
     def get_pattern(self, x, y):
         """Get a pattern from the input image, considering wrapping."""
-        pattern = np.zeros((self.pattern_size, self.pattern_size), dtype=self.input_image.dtype)
+        pattern = np.full((self.pattern_size, self.pattern_size), fill_value=self.nan_value, dtype=self.input_image.dtype)
         for dy in range(self.pattern_size):
-            # if y + dy >= self.input_size[0]:
-            #     break
+            if not self.wrap and (y + dy >= self.input_size[0]):
+                break
             for dx in range(self.pattern_size):
-                # if x + dx >= self.input_size[1]:
-                #     break
+                if not self.wrap and (x + dx >= self.input_size[1]):
+                    break
+
                 pattern[dy, dx] = self.input_image[(y + dy) % self.input_size[0], (x + dx) % self.input_size[1]]
                 # pattern[dy, dx] = self.input_image[(y + dy), (x + dx)]
+
         return pattern
 
     def initialize_output_grid(self):
@@ -140,8 +186,8 @@ class WaveFunctionCollapse:
                     if len(self.possible_patterns[y][x]) == 1:
                         pattern = next(iter(self.possible_patterns[y][x]))
                         for direction, dy, dx in [('above', -1, 0), ('below', 1, 0), ('left', 0, -1), ('right', 0, 1)]:
-                            # if y + dy >= self.grid_size[0] or x + dx >= self.grid_size[1]:
-                            #     continue
+                            if not self.wrap and (y + dy >= self.grid_size[0] or x + dx >= self.grid_size[1] or y + dy < 0 or x + dx < 0):
+                                continue
                             
                             ny, nx = (y + dy) % self.grid_size[0], (x + dx) % self.grid_size[1]
                             # ny, nx = (y + dy), (x + dx)
@@ -156,7 +202,6 @@ class WaveFunctionCollapse:
     def run(self):
         try:
             """Run the WFC algorithm until the grid is fully populated."""
-            self.extract_patterns()
             self.initialize_output_grid()
 
             while True:
@@ -318,12 +363,11 @@ class WaveFunctionCollapseVisualizer:
 
 if __name__ == "__main__":
     # Example Usage
-    input_image = [
-        [0, 1, 2, 0],
-        [2, 0, 1, 1],
-        [1, 2, 0, 2],
-        [0, 1, 2, 0]
-    ]
+    input_image = [[0,0,0,0],
+                [0,1,1,1],
+                [0,1,2,1],
+                [0,1,1,1]]
+    
     wfc = WaveFunctionCollapse(input_image, pattern_size=2, grid_size=(12,12))
     output_image = wfc.run()
     print(output_image)
