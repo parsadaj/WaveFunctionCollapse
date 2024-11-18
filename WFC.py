@@ -4,18 +4,14 @@ import random
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
-# Step 1: Define a custom exception class
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):
         super().__init__(message)
         
         
 class WaveFunctionCollapse:
-    def __init__(self, input_image, pattern_size, grid_size=None, wrap_input=False, random_seed=None):
-        if random_seed is not None:
-            self.random_seed = random_seed
-        else:
-            self.random_seed = 0
+    def __init__(self, input_image, pattern_size, grid_size=None, wrap_input=False, random_seed=0, nan_value=-32607.0):
+        self.random_seed = random_seed
         self.input_image = np.array(input_image)
         self.input_size = self.input_image.shape
         self.pattern_size = pattern_size
@@ -32,7 +28,10 @@ class WaveFunctionCollapse:
         self.observations = []
         self.wrap = wrap_input
         
-        self.nan_value = np.min(input_image) - 1
+        if nan_value is None:
+            self.nan_value = np.min(input_image) - 1
+        else:
+            self.nan_value = nan_value
         
         self.extract_patterns()
 
@@ -49,12 +48,12 @@ class WaveFunctionCollapse:
     
     def extract_patterns(self):
         """Extract patterns and compute their frequencies and adjacency rules."""
-        height, width = self.input_image.shape
+        height, width = self.input_image.shape[0:2]
         for y in range(height):
             for x in range(width):
                 pattern = self.get_pattern(x, y)
                 # self.patterns.append(pattern)
-                if not self.nan_value in pattern:
+                if self.nan_value not in pattern:
                     self.pattern_frequencies[tuple(pattern.flatten())] += 1
 
 
@@ -80,32 +79,32 @@ class WaveFunctionCollapse:
             for pattern2 in self.patterns:
                 # Check if pattern1 can be above pattern2
                 if np.array_equal(
-                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[-1, :], 
-                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[0, :]
+                    np.array(pattern1).reshape(*self.pattern_size)[-1, ...], 
+                    np.array(pattern2).reshape(*self.pattern_size)[0, ...]
                 ):
                     self.adjacency_rules[pattern1]['below'].add(pattern2)
                     self.adjacency_rules[pattern2]['above'].add(pattern1)
 
                 # Check if pattern1 can be below pattern2
                 if np.array_equal(
-                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[0, :], 
-                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[-1, :]
+                    np.array(pattern1).reshape(*self.pattern_size)[0, :], 
+                    np.array(pattern2).reshape(*self.pattern_size)[-1, :]
                 ):
                     self.adjacency_rules[pattern1]['above'].add(pattern2)
                     self.adjacency_rules[pattern2]['below'].add(pattern1)
 
                 # Check if pattern1 can be to the left of pattern2
                 if np.array_equal(
-                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[:, -1], 
-                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[:, 0]
+                    np.array(pattern1).reshape(*self.pattern_size)[:, -1], 
+                    np.array(pattern2).reshape(*self.pattern_size)[:, 0]
                 ):
                     self.adjacency_rules[pattern1]['right'].add(pattern2)
                     self.adjacency_rules[pattern2]['left'].add(pattern1)
 
                 # Check if pattern1 can be to the right of pattern2
                 if np.array_equal(
-                    np.array(pattern1).reshape(self.pattern_size, self.pattern_size)[:, 0], 
-                    np.array(pattern2).reshape(self.pattern_size, self.pattern_size)[:, -1]
+                    np.array(pattern1).reshape(*self.pattern_size)[:, 0], 
+                    np.array(pattern2).reshape(*self.pattern_size)[:, -1]
                 ):
                     self.adjacency_rules[pattern1]['left'].add(pattern2)
                     self.adjacency_rules[pattern2]['right'].add(pattern1)
@@ -113,18 +112,22 @@ class WaveFunctionCollapse:
 
     def get_pattern(self, x, y):
         """Get a pattern from the input image, considering wrapping."""
-        pattern = np.full((self.pattern_size, self.pattern_size), fill_value=self.nan_value, dtype=self.input_image.dtype)
-        for dy in range(self.pattern_size):
+        pattern = np.full(self.pattern_size, fill_value=self.nan_value, dtype=float)
+        for dy in range(self.pattern_size[0]):
             if not self.wrap and (y + dy >= self.input_size[0]):
                 break
-            for dx in range(self.pattern_size):
+            for dx in range(self.pattern_size[1]):
                 if not self.wrap and (x + dx >= self.input_size[1]):
                     break
 
-                pattern[dy, dx] = self.input_image[(y + dy) % self.input_size[0], (x + dx) % self.input_size[1]]
+                pattern[dy, dx,...] = self.input_image[(y + dy) % self.input_size[0], (x + dx) % self.input_size[1], ...]
                 # pattern[dy, dx] = self.input_image[(y + dy), (x + dx)]
 
         return pattern
+    
+    def get_entropy(self, possibilities, method='min_possibility'):
+        if method == "min_possibility":
+            return len(possibilities)
 
     def initialize_output_grid(self):
         """Initialize the output grid with all possible patterns."""
@@ -144,13 +147,14 @@ class WaveFunctionCollapse:
         for y in range(self.grid_size[0]):
             for x in range(self.grid_size[1]):
                 if self.output_grid[y, x] is None:
-                    num_possibilities = len(self.possible_patterns[y][x])
-                    if num_possibilities < min_entropy:
+                    entropy = self.get_entropy(self.possible_patterns[y][x])
+                    
+                    if entropy < min_entropy:
                         chosen_cells = []
-                        min_entropy = num_possibilities
+                        min_entropy = entropy
                         chosen_cell = (y, x)
                         chosen_cells.append(chosen_cell)
-                    elif num_possibilities == min_entropy:
+                    elif entropy == min_entropy:
                         chosen_cell = (y, x)
                         chosen_cells.append(chosen_cell)
                         
@@ -171,8 +175,6 @@ class WaveFunctionCollapse:
         )[0]
         self.output_grid[y, x] = pattern
         self.possible_patterns[y][x] = {pattern}
-
-        self.observations.append(deepcopy(self.possible_patterns))
 
         return True
 
@@ -214,7 +216,7 @@ class WaveFunctionCollapse:
             for y in range(self.grid_size[0]):
                 for x in range(self.grid_size[1]):
                     pattern = self.output_grid[y, x]
-                    final_image[y, x] = np.array(pattern).reshape(self.pattern_size, self.pattern_size)[0, 0]
+                    final_image[y, x, ...] = np.array(pattern).reshape(*self.pattern_size)[0, 0]
 
             return final_image
         except NoWFCSolution:
@@ -276,11 +278,18 @@ class WaveFunctionCollapseVisualizer:
         for idx, pattern in enumerate(unique_patterns):
             ax = axes[idx]
             pattern_array = np.array(pattern)  # Assuming patterns can be represented as 2D arrays
-
-            ax.imshow(pattern_array.reshape(self.pattern_size, self.pattern_size), cmap=self.custom_colormap, interpolation="nearest", **self.plot_args)
+            if len(self.pattern_size)==2:
+                ax.imshow(pattern_array.reshape(*self.pattern_size), cmap=self.custom_colormap, interpolation="nearest", **self.plot_args)
+            elif len(self.pattern_size)==3:
+                x = -np.arange(pattern_array.shape[0]) 
+                y = np.arange(pattern_array.shape[1])
+                X, Y = np.meshgrid(x, y)
+                Z = pattern_array 
+                ax.plot_surface(X, Y, Z, cmap='terrain', rstride=1, cstride=1, linewidth=0, antialiased=False)
+                ax.view_init(elev=45, azim=45)                
             ax.axis('off')  # Turn off the axis
             # ax.set_title(f"Pattern {self.pattern_to_number[pattern]}")
-            ax.text(0, 0, self.pattern_to_number[pattern], ha='center', va='center', fontsize=32, color='white')
+            #ax.text(0, 0, self.pattern_to_number[pattern], ha='center', va='center', fontsize=32, color='white')
             
         plt.tight_layout()
             
@@ -290,7 +299,6 @@ class WaveFunctionCollapseVisualizer:
         # Initialize a dynamic grid to accommodate multiple adjacent patterns
         # For now, start with 3x3 and expand as necessary
         grid_size = 3
-        pattern_shape = (self.pattern_size, self.pattern_size)
         
         # Start with empty lists to hold patterns for each side
         above_patterns = []
@@ -317,11 +325,11 @@ class WaveFunctionCollapseVisualizer:
         grid_cols = 1 + len(right_patterns) + len(left_patterns) 
         
         # Initialize an empty grid of pattern arrays
-        grid = np.zeros((grid_rows, grid_cols, self.pattern_size*self.pattern_size), dtype=int)
+        grid = np.zeros((grid_rows, grid_cols, np.multiply(*self.pattern_size)), dtype=int)
 
         # Place the center pattern
         center_row, center_col = len(above_patterns), len(left_patterns)
-        grid[center_row, center_col] = pattern
+        grid[center_row, center_col,...] = pattern
 
         # Helper function to place patterns in the grid
         def place_patterns(pattern_list, start_row, start_col, row_step, col_step):
@@ -343,16 +351,28 @@ class WaveFunctionCollapseVisualizer:
         for i in range(grid_rows):
             for j in range(grid_cols):
                 if i == center_row or j == center_col:
-                    ax[i,j].imshow(np.array(grid[i, j]).reshape(pattern_shape), cmap=self.custom_colormap, **self.plot_args,
-                            interpolation="nearest")#, extent=(j, j + 1, i, i + 1))
-
-                    # Add grid lines
-                    ax[i,j].set_xticks(np.arange(-0.5, grid_cols), minor=True)
-                    ax[i,j].set_yticks(np.arange(-0.5, grid_rows), minor=True)
+                    pattern_array = np.array(grid[i, j, ...]).reshape(*self.pattern_size)
                     ax[i,j].grid(which="minor", color="black", linestyle='-', linewidth=1.5)
                     ax[i,j].tick_params(which="minor", size=0)
                     ax[i,j].axis('off')  # Turn off the axis
-                    ax[i,j].text(0, 0, self.pattern_to_number[tuple(grid[i, j])], ha='center', va='center', fontsize=10, color='white')
+                    if len(self.pattern_size) == 2:
+                        ax[i,j].imshow(pattern_array, cmap=self.custom_colormap, **self.plot_args,
+                                interpolation="nearest")#, extent=(j, j + 1, i, i + 1))
+
+                        # Add grid lines
+                        ax[i,j].set_xticks(np.arange(-0.5, grid_cols), minor=True)
+                        ax[i,j].set_yticks(np.arange(-0.5, grid_rows), minor=True)
+
+                        ax[i,j].text(0, 0, self.pattern_to_number[tuple(grid[i, j])], ha='center', va='center', fontsize=10, color='white')
+                    elif len(self.pattern_size) == 3:
+                        x = -np.arange(pattern_array.shape[0]) 
+                        y = np.arange(pattern_array.shape[1])
+                        X, Y = np.meshgrid(x, y)
+                        Z = pattern_array 
+                        ax[i,j].plot_surface(X, Y, Z, cmap='terrain', rstride=1, cstride=1, linewidth=0, antialiased=False)
+                        ax[i,j].view_init(elev=45, azim=45)  
+                        
+                        
                 else:
                     ax[i,j].tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
                     ax[i,j].axis('off')  # Turn off the axis
@@ -369,7 +389,8 @@ if __name__ == "__main__":
                 [0,1,2,1],
                 [0,1,1,1]]
     
-    wfc = WaveFunctionCollapse(input_image, pattern_size=2, grid_size=(12,12))
+    pattern_size=np.array([2,2])
+    wfc = WaveFunctionCollapse(input_image, pattern_size=pattern_size, grid_size=(12,12))
     output_image = wfc.run()
     print(output_image)
     
@@ -384,7 +405,7 @@ if __name__ == "__main__":
         vmin=0,
         vmax=2
     )
-    visualizer = WaveFunctionCollapseVisualizer(grid_size=(12,12), observations=observations, pattern_to_number=pattern_to_number, pattern_size=2, adjacency_rules=wfc.adjacency_rules, plot_args=plot_args)
+    visualizer = WaveFunctionCollapseVisualizer(grid_size=(12,12), observations=observations, pattern_to_number=pattern_to_number, pattern_size=pattern_size, adjacency_rules=wfc.adjacency_rules, plot_args=plot_args)
     #visualizer.plot_observations()
     # visualizer.visualize_patterns()
     for pat in wfc.patterns:
