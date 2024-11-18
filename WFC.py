@@ -223,7 +223,7 @@ class WaveFunctionCollapse:
 
 
 class WaveFunctionCollapseVisualizer:
-    def __init__(self, grid_size, observations, pattern_to_number, pattern_size, adjacency_rules, cmap=None):
+    def __init__(self, grid_size, observations, pattern_to_number, pattern_size, adjacency_rules, plot_args={}, cmap=None):
         self.pattern_size = pattern_size
         self.grid_size = grid_size
         self.observations = observations
@@ -233,6 +233,7 @@ class WaveFunctionCollapseVisualizer:
         else:
             self.custom_colormap = 'terrain'
         self.adjacency_rules = adjacency_rules  # Adjacency rules: a dictionary
+        self.plot_args = plot_args
         
     def plot_observations(self):
         n = len(self.observations)
@@ -276,7 +277,7 @@ class WaveFunctionCollapseVisualizer:
             ax = axes[idx]
             pattern_array = np.array(pattern)  # Assuming patterns can be represented as 2D arrays
 
-            ax.imshow(pattern_array.reshape(self.pattern_size, self.pattern_size), cmap=self.custom_colormap, interpolation="nearest", vmin=0, vmax=2)
+            ax.imshow(pattern_array.reshape(self.pattern_size, self.pattern_size), cmap=self.custom_colormap, interpolation="nearest", **self.plot_args)
             ax.axis('off')  # Turn off the axis
             # ax.set_title(f"Pattern {self.pattern_to_number[pattern]}")
             ax.text(0, 0, self.pattern_to_number[pattern], ha='center', va='center', fontsize=32, color='white')
@@ -342,7 +343,7 @@ class WaveFunctionCollapseVisualizer:
         for i in range(grid_rows):
             for j in range(grid_cols):
                 if i == center_row or j == center_col:
-                    ax[i,j].imshow(np.array(grid[i, j]).reshape(pattern_shape), cmap=self.custom_colormap, vmin=0, vmax=2,
+                    ax[i,j].imshow(np.array(grid[i, j]).reshape(pattern_shape), cmap=self.custom_colormap, **self.plot_args,
                             interpolation="nearest")#, extent=(j, j + 1, i, i + 1))
 
                     # Add grid lines
@@ -379,7 +380,11 @@ if __name__ == "__main__":
 
     pattern_to_number = wfc.pattern_to_number
 
-    visualizer = WaveFunctionCollapseVisualizer(grid_size=(12,12), observations=observations, pattern_to_number=pattern_to_number, pattern_size=2, adjacency_rules=wfc.adjacency_rules)
+    plot_args = dict(
+        vmin=0,
+        vmax=2
+    )
+    visualizer = WaveFunctionCollapseVisualizer(grid_size=(12,12), observations=observations, pattern_to_number=pattern_to_number, pattern_size=2, adjacency_rules=wfc.adjacency_rules, plot_args=plot_args)
     #visualizer.plot_observations()
     # visualizer.visualize_patterns()
     for pat in wfc.patterns:
