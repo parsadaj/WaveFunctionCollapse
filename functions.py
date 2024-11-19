@@ -41,8 +41,10 @@ def slopes_to_height(grad_x, grad_y):
             hy = hh[y-1, x] + grad_y[y-1, x]
             hx = hh[y, x-1] + grad_x[y, x-1]
             
-            assert hy == hx
-            hh[y, x] = hx
+            if hy == hx:
+                hh[y, x] = hx
+            else:
+                hh[y, x] = (hx + hy) / 2
             
             # if x == 0 and y < hh.shape[0]-1:
             #     hh[y+1, x] = hh[y,x] + grad_y[y,x]
