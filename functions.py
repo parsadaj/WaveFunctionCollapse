@@ -22,18 +22,40 @@ def slopes_to_height(grad_x, grad_y):
         grad_x.shape[0],
         grad_y.shape[1]
     ))
-    
-    for y in range(hh.shape[0] - 1):
-        for x in range(y+1):
-            if x == 0 and y < hh.shape[0]-1:
-                hh[y+1, x] = hh[y,x] + grad_y[y,x]
-            if x < hh.shape[1] - 1:
-                hh[y,x+1] = hh[y,x] + grad_x[y,x]
-            if y < hh.shape[1] - 1:
-                hh[x,y+1] = hh[x,y] + grad_x[x,y]
+
+    for y in range(hh.shape[0]):
+        for x in range(hh.shape[1]):
+            
+            if x == 0 and y == 0:
+                hh[y, x] = 0
+                continue
+            
+            if y == 0:
+                hh[y, x] = hh[y, x-1] + grad_x[y, x-1]
+                continue
+                
+            if x == 0:
+                hh[y,x] = hh[y-1, x] + grad_y[y-1, x]
+                continue
+            
+            hy = hh[y-1, x] + grad_y[y-1, x]
+            hx = hh[y, x-1] + grad_x[y, x-1]
+            
+            assert hy == hx
+            hh[y, x] = hx
+            
+            # if x == 0 and y < hh.shape[0]-1:
+            #     hh[y+1, x] = hh[y,x] + grad_y[y,x]
+            #     print(y+1,x)
+            # if x < hh.shape[1] - 1:
+            #     hh[y,x+1] = hh[y,x] + grad_x[y,x]
+            #     print(y,x+1)
+            # if y < hh.shape[1] - 1:
+            #     hh[x,y+1] = hh[x,y] + grad_x[x,y]
+            #     print(x,y+1)
 
         
-    hh[-1, :] = hh[-2,:] + grad_y[-1,:]
+    #hh[-1, :] = hh[-2,:] + grad_y[-1,:]
     return hh
 
 def height_to_slopes(heightmap):

@@ -3,6 +3,8 @@ from collections import defaultdict
 import random
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from tqdm import tqdm
+from functions import slopes_to_height
 
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):
@@ -10,7 +12,7 @@ class NoWFCSolution(Exception):
         
         
 class WaveFunctionCollapse:
-    def __init__(self, input_image, pattern_size, grid_size=None, wrap_input=False, random_seed=0, nan_value=-32607.0):
+    def __init__(self, input_image, pattern_size, grid_size=None, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1):
         self.random_seed = random_seed
         self.input_image = np.array(input_image)
         self.input_size = self.input_image.shape
@@ -32,6 +34,9 @@ class WaveFunctionCollapse:
             self.nan_value = np.min(input_image) - 1
         else:
             self.nan_value = nan_value
+            
+        self.remove_low_freq = remove_low_freq
+        self.low_freq =low_freq
         
         self.extract_patterns()
 
@@ -49,15 +54,18 @@ class WaveFunctionCollapse:
     def extract_patterns(self):
         """Extract patterns and compute their frequencies and adjacency rules."""
         height, width = self.input_image.shape[0:2]
-        for y in range(height):
+        
+        for y in tqdm(range(height), desc="Extracting Patterns"):
             for x in range(width):
                 pattern = self.get_pattern(x, y)
                 # self.patterns.append(pattern)
                 if self.nan_value not in pattern:
                     self.pattern_frequencies[tuple(pattern.flatten())] += 1
 
-
-        self.patterns = self.pattern_frequencies.keys()  # Remove duplicates
+        if self.remove_low_freq:
+            self.patterns = [k for k in self.pattern_frequencies.keys() if self.pattern_frequencies[k] > self.low_freq] # Remove duplicates
+        else:
+            self.patterns = list(self.pattern_frequencies.keys())
         self.pattern_to_number, self.number_to_pattern = self.generate_pattern_mappings()
 
         # # Set up adjacency rules
@@ -75,7 +83,7 @@ class WaveFunctionCollapse:
         #         self.adjacency_rules[tuple(pattern.flatten())]['right'].add(tuple(right_pattern.flatten()))
 
     # Set up adjacency rules based on compatibility
-        for pattern1 in self.patterns:
+        for pattern1 in tqdm(self.patterns, "Matching Patterns"):
             for pattern2 in self.patterns:
                 # Check if pattern1 can be above pattern2
                 if np.array_equal(
@@ -133,7 +141,7 @@ class WaveFunctionCollapse:
         """Initialize the output grid with all possible patterns."""
         self.output_grid = np.full(self.grid_size, None)
         self.possible_patterns = [[set(self.pattern_frequencies.keys()) for _ in range(self.grid_size[1])]
-                                  for _ in range(self.grid_size[0])]
+                                  for _ in tqdm(range(self.grid_size[0]), desc="Initializing Grid")]
 
     def observe(self):
         """Select the most constrained cell and collapse its wave function."""
@@ -142,9 +150,10 @@ class WaveFunctionCollapse:
         chosen_cells = []
         
         self.observations.append(deepcopy(self.possible_patterns))
-
+        attempt = len(self.observations)
+        
         # Find the cell with the least possibilities (highest constraint)
-        for y in range(self.grid_size[0]):
+        for y in tqdm(range(self.grid_size[0]), desc=f"Observation number {attempt}"):
             for x in range(self.grid_size[1]):
                 if self.output_grid[y, x] is None:
                     entropy = self.get_entropy(self.possible_patterns[y][x])
@@ -221,6 +230,7 @@ class WaveFunctionCollapse:
             return final_image
         except NoWFCSolution:
             print("No Solution Found, Retrying...")
+            self.observations = []
             return self.run()
 
 
@@ -267,32 +277,39 @@ class WaveFunctionCollapseVisualizer:
             # ax.set_title(f"Observation {idx + 1}")
 
         plt.tight_layout()
-
-    def visualize_patterns(self):
+        plt.show()
+    
+    def visualize_patterns(self, n_max=None):
         unique_patterns = list(self.pattern_to_number.keys())
-        n = len(unique_patterns)
+        if n_max is None:
+            n = len(unique_patterns)
+        else:
+            n = min(n_max, len(unique_patterns))
+        
         fig, axes = plt.subplots(1, n, figsize=(3 * n, 3))
         if n == 1:
             axes = [axes]  # Handle the case where n=1
 
-        for idx, pattern in enumerate(unique_patterns):
+        for idx in range(n):
+            pattern = unique_patterns[idx]
             ax = axes[idx]
-            pattern_array = np.array(pattern)  # Assuming patterns can be represented as 2D arrays
-            if len(self.pattern_size)==2:
-                ax.imshow(pattern_array.reshape(*self.pattern_size), cmap=self.custom_colormap, interpolation="nearest", **self.plot_args)
-            elif len(self.pattern_size)==3:
-                x = -np.arange(pattern_array.shape[0]) 
-                y = np.arange(pattern_array.shape[1])
-                X, Y = np.meshgrid(x, y)
-                Z = pattern_array 
-                ax.plot_surface(X, Y, Z, cmap='terrain', rstride=1, cstride=1, linewidth=0, antialiased=False)
-                ax.view_init(elev=45, azim=45)                
+            pattern_array = np.array(pattern).reshape(*self.pattern_size)  # Assuming patterns can be represented as 2D arrays
+            if len(self.pattern_size) == 3:
+                Z = slopes_to_height(pattern_array[..., 0], pattern_array[..., 1])
+            else:
+                Z = pattern_array
+            ax.imshow(Z, cmap=self.custom_colormap, interpolation="nearest", **self.plot_args)
+               
             ax.axis('off')  # Turn off the axis
-            # ax.set_title(f"Pattern {self.pattern_to_number[pattern]}")
-            #ax.text(0, 0, self.pattern_to_number[pattern], ha='center', va='center', fontsize=32, color='white')
+            ax.set_title(f"Pattern {self.pattern_to_number[pattern]}")
+            for i in range(self.pattern_size[0]):
+                for j in range(self.pattern_size[1]):
+                    ax.text(j, i, int(pattern_array[i, j]), ha='center', va='center', fontsize=32, color='black')
+            # ax.text(0, 0, self.pattern_to_number[pattern], ha='center', va='center', fontsize=32, color='black')
             
         plt.tight_layout()
-            
+        plt.show()
+        
     def visualize_adjacency(self, pattern):
         pattern_number = self.pattern_to_number[pattern]
 
@@ -355,24 +372,19 @@ class WaveFunctionCollapseVisualizer:
                     ax[i,j].grid(which="minor", color="black", linestyle='-', linewidth=1.5)
                     ax[i,j].tick_params(which="minor", size=0)
                     ax[i,j].axis('off')  # Turn off the axis
-                    if len(self.pattern_size) == 2:
-                        ax[i,j].imshow(pattern_array, cmap=self.custom_colormap, **self.plot_args,
-                                interpolation="nearest")#, extent=(j, j + 1, i, i + 1))
-
-                        # Add grid lines
-                        ax[i,j].set_xticks(np.arange(-0.5, grid_cols), minor=True)
-                        ax[i,j].set_yticks(np.arange(-0.5, grid_rows), minor=True)
-
-                        ax[i,j].text(0, 0, self.pattern_to_number[tuple(grid[i, j])], ha='center', va='center', fontsize=10, color='white')
-                    elif len(self.pattern_size) == 3:
-                        x = -np.arange(pattern_array.shape[0]) 
-                        y = np.arange(pattern_array.shape[1])
-                        X, Y = np.meshgrid(x, y)
-                        Z = pattern_array 
-                        ax[i,j].plot_surface(X, Y, Z, cmap='terrain', rstride=1, cstride=1, linewidth=0, antialiased=False)
-                        ax[i,j].view_init(elev=45, azim=45)  
+                    if len(self.pattern_size) == 3:
+                        Z = slopes_to_height(pattern_array[..., 0], pattern_array[..., 1])
+                    else:
+                        Z = pattern_array
                         
-                        
+                    ax[i,j].imshow(Z, cmap=self.custom_colormap, **self.plot_args,
+                            interpolation="nearest")#, extent=(j, j + 1, i, i + 1))
+
+                    # Add grid lines
+                    ax[i,j].set_xticks(np.arange(-0.5, grid_cols), minor=True)
+                    ax[i,j].set_yticks(np.arange(-0.5, grid_rows), minor=True)
+
+                    ax[i,j].text(0, 0, self.pattern_to_number[tuple(grid[i, j])], ha='center', va='center', fontsize=10, color='black')
                 else:
                     ax[i,j].tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
                     ax[i,j].axis('off')  # Turn off the axis
@@ -380,6 +392,7 @@ class WaveFunctionCollapseVisualizer:
 
         # Add the title
         plt.tight_layout()
+        plt.show()
 
 
 if __name__ == "__main__":
@@ -389,8 +402,10 @@ if __name__ == "__main__":
                 [0,1,2,1],
                 [0,1,1,1]]
     
-    pattern_size=np.array([2,2])
-    wfc = WaveFunctionCollapse(input_image, pattern_size=pattern_size, grid_size=(12,12))
+    # input_image = np.dstack((input_image, input_image))
+    
+    pattern_size=np.array([2,2])#,2])
+    wfc = WaveFunctionCollapse(input_image, pattern_size=pattern_size, grid_size=(12,12), wrap_input=True)
     output_image = wfc.run()
     print(output_image)
     
@@ -406,9 +421,9 @@ if __name__ == "__main__":
         vmax=2
     )
     visualizer = WaveFunctionCollapseVisualizer(grid_size=(12,12), observations=observations, pattern_to_number=pattern_to_number, pattern_size=pattern_size, adjacency_rules=wfc.adjacency_rules, plot_args=plot_args)
-    #visualizer.plot_observations()
-    # visualizer.visualize_patterns()
-    for pat in wfc.patterns:
-        visualizer.visualize_adjacency(pat)
+    # visualizer.plot_observations()
+    visualizer.visualize_patterns(n_max=10)
+    # for pat in wfc.patterns:
+    visualizer.visualize_adjacency(next(iter(wfc.patterns)))
 
 

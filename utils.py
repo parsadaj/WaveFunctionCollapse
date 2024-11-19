@@ -18,7 +18,7 @@ def visualize_terrain(terrain, cmap='terrain'):
 
 
 
-def visualize_3d_terrain(terrain, cmap='terrain', elev=45, azim=45, x_scale=30, y_scale=30, z_scale=1):
+def visualize_3d_terrain(terrain, cmap='terrain', elev=45, azim=45, x_scale=30, y_scale=30, z_scale=1, sampling_scale_factor=1/8):
     """
     Visualize the terrain heightmap in 3D using matplotlib.
     
@@ -30,8 +30,8 @@ def visualize_3d_terrain(terrain, cmap='terrain', elev=45, azim=45, x_scale=30, 
     """
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
-    x = -np.arange(terrain.shape[0]) * x_scale
-    y = np.arange(terrain.shape[1]) * y_scale
+    x = -np.arange(terrain.shape[0]) * x_scale / sampling_scale_factor
+    y = np.arange(terrain.shape[1]) * y_scale / sampling_scale_factor
     X, Y = np.meshgrid(x, y)
     Z = terrain * z_scale
     ax.plot_surface(X, Y, Z, cmap=cmap, rstride=1, cstride=1, linewidth=0, antialiased=False)
