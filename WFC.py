@@ -61,7 +61,7 @@ class WaveFunctionCollapse:
         # mirror_h = pattern[::-1, ...]
         # mirror_v = pattern[:, ::-1, ...]
         # for pat in [rotated90, rotated180, rotated270, mirror_h, mirror_v]:
-        for pat in [pattern.transpose([1,0,2]), -pattern]:
+        for pat in [-pattern]:
             self.pattern_frequencies[tuple(pat.flatten())] += 1
         
     def extract_patterns(self):
@@ -78,7 +78,7 @@ class WaveFunctionCollapse:
                         self.add_augmentations(pattern)
 
         if self.remove_low_freq:
-            self.patterns = [k for k in self.pattern_frequencies.keys() if self.pattern_frequencies[k] > self.low_freq] # Remove duplicates
+            self.patterns = [k for k in self.pattern_frequencies.keys() if self.pattern_frequencies[k] > self.low_freq] 
         else:
             self.patterns = list(self.pattern_frequencies.keys())
         self.pattern_to_number, self.number_to_pattern = self.generate_pattern_mappings()
@@ -100,7 +100,7 @@ class WaveFunctionCollapse:
     # Set up adjacency rules based on compatibility
         
         for i in tqdm(range(len(self.patterns)), "Matching Patterns"):
-            for j in range(i+1):
+            for j in range(i, len(self.patterns)):
                 pattern1 = self.patterns[i]
                 pattern2 = self.patterns[j]
                 

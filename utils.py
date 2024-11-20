@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
 def visualize_terrain(terrain, cmap='terrain'):
     """
@@ -60,3 +61,12 @@ def read_hgt(filename):
         # Read the data as 16-bit signed integers
         elevation_data = np.fromfile(file, np.int16).reshape(shape)
         return elevation_data
+
+
+def save_state(obj, filename):
+    with open(filename, 'wb') as file:
+        pickle.dump(obj, file)
+        
+def load_state(filename):
+    with open(filename, 'rb') as file:
+        return pickle.load(file)
