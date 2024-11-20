@@ -12,7 +12,7 @@ class NoWFCSolution(Exception):
         
         
 class WaveFunctionCollapse:
-    def __init__(self, input_image, pattern_size, grid_size=None, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1, augment_patterns=True):
+    def __init__(self, input_image, pattern_size, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1, augment_patterns=True, max_runs=25):
         self.random_seed = random_seed
         self.input_image = np.array(input_image)
         self.input_size = self.input_image.shape
@@ -21,10 +21,7 @@ class WaveFunctionCollapse:
         self.pattern_frequencies = defaultdict(int)
         self.adjacency_rules = defaultdict(default_dict_of_sets)
         
-        if grid_size is None:
-            self.grid_size = self.input_size
-        else:
-            self.grid_size = grid_size
+
         self.output_grid = None
         self.possible_patterns = None
         self.observations = []
@@ -38,6 +35,8 @@ class WaveFunctionCollapse:
         self.remove_low_freq = remove_low_freq
         self.low_freq =low_freq
         self.augment_patterns = augment_patterns
+        self.n_runs = 0
+        self.max_runs = max_runs
         
         self.extract_patterns()
 
@@ -250,7 +249,9 @@ class WaveFunctionCollapse:
                                     self.possible_patterns[ny][nx] = valid_patterns
                                     changes = True
 
-    def run(self):
+    def run(self, grid_size):
+        self.grid_size = grid_size
+        self.n_runs += 1
         try:
             """Run the WFC algorithm until the grid is fully populated."""
             self.initialize_output_grid()
@@ -269,6 +270,9 @@ class WaveFunctionCollapse:
 
             return final_image
         except NoWFCSolution:
+            if self.n_runs >= self.max_runs:
+                print("No Solution Found, Giving Up!")
+                return np.zeros(self.grid_size)
             print("No Solution Found, Retrying...")
             self.observations = []
             return self.run()

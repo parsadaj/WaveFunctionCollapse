@@ -14,9 +14,13 @@ import os
 # sample_data_path = "data/N26E057.hgt"
 # sample_data_path = "data/N27E060.hgt"
 # sample_data_path = "data/N28E057.hgt"
+run_number = 1
+save_path = "./results/run_{}"
+while os.path.exists(save_path.format(run_number)):
+    run_number += 1
+save_path = save_path.format(run_number)
 
-
-for sample_data_path in ["data/N28E057.hgt", "data/N29E058.hgt", "data/N30E054.hgt", "data/N31E051.hgt", "data/N35E047.hgt"]:
+for sample_data_path in ["data/N31E051.hgt", "data/N35E047.hgt"]:
     scale_factor = 1.0 / 8
 
 
@@ -50,22 +54,20 @@ for sample_data_path in ["data/N28E057.hgt", "data/N29E058.hgt", "data/N30E054.h
 
     # WFC Extraction
     slopes = np.concatenate([grad_x[:-1, ..., np.newaxis], grad_y[..., :-1, np.newaxis]], axis=2)
-    wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), (20,20,2), remove_low_freq=False, low_freq=1)
+    wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), remove_low_freq=False, low_freq=1)
     wfc_terrain.match_patterns()
 
     dirname = os.path.splitext(os.path.basename(sample_data_path))[0]
-    os.makedirs(f"./results/{dirname}", exist_ok=True)
-    save_state(wfc_terrain, f'./results/{dirname}/wfc_state.pkl')
-    # save_state(wfc_terrain.pattern_frequencies, 'wfc_patterns.pkl')
-    # save_state(wfc_terrain.adjacency_rules, 'wfc_adjacency.pkl')
-    # save_state(wfc_terrain.pattern_to_number, 'wfc_pattern2num.pkl')
+    
+    os.makedirs(f"{save_path}/{dirname}", exist_ok=True)
+    save_state(wfc_terrain, f'{save_path}/{dirname}/wfc_state.pkl')
 
     # running WFC
     n_out = 0
 
     while n_out < 2:
-        output_image = wfc_terrain.run()
-        save_state(output_image, f'./results/{dirname}/wfc_out.pkl')
+        output_image = wfc_terrain.run(grid_size=((20, 20, 2)))
+        save_state(output_image, f'./results/{dirname}/wfc_out_{n_out+1}.pkl')
         n_out += 1
 
     print(f"done with {dirname}...")
