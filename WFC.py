@@ -275,7 +275,7 @@ class WaveFunctionCollapse:
                 return np.zeros(self.grid_size)
             print("No Solution Found, Retrying...")
             self.observations = []
-            return self.run()
+            return self.run(grid_size)
 
 
 class WaveFunctionCollapseVisualizer:
@@ -459,7 +459,7 @@ if __name__ == "__main__":
     
     
     wfc = WaveFunctionCollapse(input_image, pattern_size=pattern_size, grid_size=grid_size)
-    output_image = wfc.run()
+    output_image = wfc.run(grid_size)
     print(output_image)
     
     # Example usage:
