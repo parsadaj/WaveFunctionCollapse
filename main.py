@@ -58,3 +58,4 @@ save_state(wfc_terrain, './results/wave_function_collapse_state.pkl')
 # running WFC
 n_out = 0
 output_image = wfc_terrain.run()
+save_state(output_image, './results/wfc_out.pkl')
