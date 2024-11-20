@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 from tqdm import tqdm
 from functions import slopes_to_height
-
+from utils import default_dict_of_sets
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):
         super().__init__(message)
@@ -19,7 +19,7 @@ class WaveFunctionCollapse:
         self.pattern_size = pattern_size
         # self.patterns = []
         self.pattern_frequencies = defaultdict(int)
-        self.adjacency_rules = defaultdict(lambda: defaultdict(set))
+        self.adjacency_rules = defaultdict(default_dict_of_sets)
         
         if grid_size is None:
             self.grid_size = self.input_size
@@ -97,8 +97,8 @@ class WaveFunctionCollapse:
         #         self.adjacency_rules[tuple(pattern.flatten())]['left'].add(tuple(left_pattern.flatten()))
         #         self.adjacency_rules[tuple(pattern.flatten())]['right'].add(tuple(right_pattern.flatten()))
 
+    def match_patterns(self):
     # Set up adjacency rules based on compatibility
-        
         for i in tqdm(range(len(self.patterns)), "Matching Patterns"):
             for j in range(i, len(self.patterns)):
                 pattern1 = self.patterns[i]

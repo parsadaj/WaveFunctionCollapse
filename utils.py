@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
+from collections import defaultdict
+import os
+
 
 def visualize_terrain(terrain, cmap='terrain'):
     """
@@ -64,9 +67,22 @@ def read_hgt(filename):
 
 
 def save_state(obj, filename):
+    base_name, ext = os.path.splitext(filename)
+    counter = 1
+
+    # Increment the filename until a non-existing one is found
+    while os.path.exists(filename):
+        filename = f"{base_name}_{counter}{ext}"
+        counter += 1
+
     with open(filename, 'wb') as file:
         pickle.dump(obj, file)
-        
+    print(f"State saved to: {filename}")
+    
+
 def load_state(filename):
     with open(filename, 'rb') as file:
         return pickle.load(file)
+    
+def default_dict_of_sets():
+    return defaultdict(set)

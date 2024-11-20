@@ -3,11 +3,9 @@
 
 import numpy as np
 import rasterio
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-from WFC import WaveFunctionCollapse, WaveFunctionCollapseVisualizer
-from utils import visualize_3d_terrain, visualize_terrain, save_state, load_state
+from WFC import WaveFunctionCollapse
+from utils import save_state
 from functions import height_to_slopes, slopes_to_height
 
 
@@ -50,8 +48,12 @@ else:
 # WFC Extraction
 slopes = np.concatenate([grad_x[:-1, ..., np.newaxis], grad_y[..., :-1, np.newaxis]], axis=2)
 wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), (20,20,2), remove_low_freq=False, low_freq=1)
+wfc_terrain.match_patterns()
 
-save_state(wfc_terrain, 'wfc_state.pkl')
+save_state(wfc_terrain, './results/wave_function_collapse_state.pkl')
+# save_state(wfc_terrain.pattern_frequencies, 'wfc_patterns.pkl')
+# save_state(wfc_terrain.adjacency_rules, 'wfc_adjacency.pkl')
+# save_state(wfc_terrain.pattern_to_number, 'wfc_pattern2num.pkl')
 
 # running WFC
 n_out = 0
