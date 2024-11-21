@@ -8,17 +8,6 @@ from functions import slopes_to_height
 from utils import default_dict_of_sets
 import seaborn as sns
 
-def augment_images(images_list: list):
-    new_list = deepcopy(images_list)
-    for image in images_list:
-        rot90 = np.rot90(image)
-        rot180 = np.rot90(rot90)
-        rot270 = np.rot90(rot180)
-        flip_h = np.fliplr(image)
-        flip_v = np.flipud(image)   
-        new_list.extend([rot90, rot180, rot270, flip_h, flip_v])
-    return new_list
-
 
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):

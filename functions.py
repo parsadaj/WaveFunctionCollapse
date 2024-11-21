@@ -1,5 +1,5 @@
 import numpy as np
-
+from copy import deepcopy
 
 def slopes_to_height(grad_x, grad_y):
     # # Integrate the x-gradient along the x direction
@@ -73,3 +73,24 @@ def height_to_slopes(heightmap):
     grad_y = heightmap[1:, :] - heightmap[:-1, :]
     
     return grad_x, grad_y
+
+def augment_images(images_list: list, rot90=True, rot180=True, rot270=True, flip_v=True, flip_h=True, transpose=False):
+    new_list = deepcopy(images_list)
+    for image in images_list:
+        if rot90:
+            new_list.append(np.rot90(image))
+        if rot180:
+            new_list.append(np.rot90(np.rot90(image)))
+        if rot270:
+            new_list.append(np.rot90(np.rot90(np.rot90(image))))
+        if flip_h:
+            new_list.append(np.fliplr(image))
+        if flip_v:
+            new_list.append(np.flipud(image))
+        if transpose:
+            try:
+                new_list.append(np.transpose(image, [1,0,2]))
+            except:
+                print("Can't add transpose!")
+
+    return new_list

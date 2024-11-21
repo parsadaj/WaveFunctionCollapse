@@ -4,21 +4,22 @@
 import numpy as np
 import rasterio
 
-from WFC import WaveFunctionCollapse, augment_images
+from WFC import WaveFunctionCollapse
 from utils import save_state, load_state
-from functions import height_to_slopes, slopes_to_height
+from functions import height_to_slopes, slopes_to_height, augment_images
 
 import os
+import glob
 
 # reading data
 # sample_data_path = "data/N26E057.hgt"
 # sample_data_path = "data/N27E060.hgt"
 # sample_data_path = "data/N28E057.hgt"
 
-save_path = "./results/run"
+# save_path = "./results/run"
+save_path = "./results/run_multi_input"
 
-
-for sample_data_path in ["data/N30E054.hgt", "data/N31E051.hgt", "data/N35E047.hgt"]:
+for sample_data_path in glob.glob("data/*.hgt"):#["data/N30E054.hgt", "data/N31E051.hgt", "data/N35E047.hgt"]:
     scale_factor = 1.0 / 8
 
 
