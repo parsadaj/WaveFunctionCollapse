@@ -4,7 +4,7 @@
 import numpy as np
 import rasterio
 
-from WFC import WaveFunctionCollapse
+from WFC import WaveFunctionCollapse, augment_images
 from utils import save_state, load_state
 from functions import height_to_slopes, slopes_to_height
 
@@ -28,32 +28,35 @@ for sample_data_path in ["data/N30E054.hgt", "data/N31E051.hgt", "data/N35E047.h
         new_width = int(src.width * scale_factor)
 
         # Read and resample the data to the new shape
-        sample_data = src.read(
+        sample_data = [src.read(
             1,  # First band
             out_shape=(new_height, new_width),
             resampling=rasterio.enums.Resampling.bilinear  # Choose the resampling method
-        ).astype(float)[250:350, 200:300]
+        ).astype(float)[250:350, 200:300]]
         
-
-
+    sample_data = augment_images(sample_data)
     print("data path: ", sample_data_path)
 
-    # calculating grads
-    grad_x, grad_y = height_to_slopes(sample_data)
-
-    # recreatinh hright from grad
-    hh = slopes_to_height(grad_x, grad_y)
+    slopes = []
     
-    
-    if len(np.unique(hh-sample_data)) == 1:
-        print("Recreating height succesful")
-    else:
-        print("Recreating height failed")
+    for dat in sample_data:
+        
+        # calculating grads
+        grad_x, grad_y = height_to_slopes(dat)
 
+        # recreatinh hright from grad
+        hh = slopes_to_height(grad_x, grad_y)
+        
+        
+        if len(np.unique(hh-dat)) == 1:
+            print("Recreating height succesful")
+        else:
+            print("Recreating height failed")
 
-    # WFC Extraction
-    slopes = np.concatenate([grad_x[:-1, ..., np.newaxis], grad_y[..., :-1, np.newaxis]], axis=2)
-    
+        # WFC Extraction
+        slope = np.concatenate([grad_x[:-1, ..., np.newaxis], grad_y[..., :-1, np.newaxis]], axis=2)
+        slopes.append(slope)
+    slopes = np.dstack(slopes)
 
     dirname = os.path.splitext(os.path.basename(sample_data_path))[0]
     os.makedirs(f"{save_path}/{dirname}", exist_ok=True)

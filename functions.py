@@ -23,6 +23,7 @@ def slopes_to_height(grad_x, grad_y):
         grad_y.shape[1]
     ))
 
+    failed = False
     for y in range(hh.shape[0]):
         for x in range(hh.shape[1]):
             
@@ -37,14 +38,16 @@ def slopes_to_height(grad_x, grad_y):
             if x == 0:
                 hh[y,x] = hh[y-1, x] + grad_y[y-1, x]
                 continue
-            
-            hy = hh[y-1, x] + grad_y[y-1, x]
-            hx = hh[y, x-1] + grad_x[y, x-1]
-            
-            if hy == hx:
-                hh[y, x] = hx
-            else:
-                hh[y, x] = (hx + hy) / 2
+                
+            if y > 0 and x > 0:
+                hy = hh[y-1, x] + grad_y[y-1, x]
+                hx = hh[y, x-1] + grad_x[y, x-1]
+                
+                if hy == hx:
+                    hh[y, x] = hx
+                else:
+                    failed = True
+                    hh[y, x] = (hx + hy) / 2
             
             # if x == 0 and y < hh.shape[0]-1:
             #     hh[y+1, x] = hh[y,x] + grad_y[y,x]
@@ -58,6 +61,8 @@ def slopes_to_height(grad_x, grad_y):
 
         
     #hh[-1, :] = hh[-2,:] + grad_y[-1,:]
+    if failed:
+        print("Conflict in Reconstruction. Averaged the grad values")
     return hh
 
 def height_to_slopes(heightmap):

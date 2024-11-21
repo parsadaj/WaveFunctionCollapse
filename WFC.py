@@ -6,16 +6,35 @@ from copy import deepcopy
 from tqdm import tqdm
 from functions import slopes_to_height
 from utils import default_dict_of_sets
+import seaborn as sns
+
+def augment_images(images_list: list):
+    new_list = deepcopy(images_list)
+    for image in images_list:
+        rot90 = np.rot90(image)
+        rot180 = np.rot90(rot90)
+        rot270 = np.rot90(rot180)
+        flip_h = np.fliplr(image)
+        flip_v = np.flipud(image)   
+        new_list.extend([rot90, rot180, rot270, flip_h, flip_v])
+    return new_list
+
+
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):
         super().__init__(message)
         
         
 class WaveFunctionCollapse:
-    def __init__(self, input_image, pattern_size, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1, augment_patterns=True, max_runs=25):
+    def __init__(self, input_images, pattern_size, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1, augment_patterns=False, max_runs=25):
         self.random_seed = random_seed
-        self.input_image = np.array(input_image)
-        self.input_size = self.input_image.shape
+        self.input_images = np.dstack(input_images)
+        self.n_images = len(input_images)
+        if len(np.array(input_images[0]).shape) == 2:
+            self.channels_per_image = 1
+        else:
+            self.channels_per_image = np.array(input_images[0]).shape[2]
+
         self.pattern_size = pattern_size
         # self.patterns = []
         self.pattern_frequencies = defaultdict(int)
@@ -65,16 +84,18 @@ class WaveFunctionCollapse:
         
     def extract_patterns(self):
         """Extract patterns and compute their frequencies and adjacency rules."""
-        height, width = self.input_image.shape[0:2]
         
-        for y in tqdm(range(height), desc="Extracting Patterns"):
-            for x in range(width):
-                pattern = self.get_pattern(x, y)
-                # self.patterns.append(pattern)
-                if self.nan_value not in pattern:
-                    self.pattern_frequencies[tuple(pattern.flatten())] += 1
-                    if self.augment_patterns:
-                        self.add_augmentations(pattern)
+        for i in range(self.n_images):
+            _image = self.input_images[..., self.channels_per_image*i:self.channels_per_image*i+self.channels_per_image]
+            height, width = _image.shape[0:2]
+            for y in tqdm(range(height), desc="Extracting Patterns"):
+                for x in range(width):
+                    pattern = self.get_pattern(x, y, height, width, _image)
+                    # self.patterns.append(pattern)
+                    if self.nan_value not in pattern:
+                        self.pattern_frequencies[tuple(pattern.flatten())] += 1
+                        if self.augment_patterns:
+                            self.add_augmentations(pattern)
 
         if self.remove_low_freq:
             self.patterns = [k for k in self.pattern_frequencies.keys() if self.pattern_frequencies[k] > self.low_freq] 
@@ -138,17 +159,17 @@ class WaveFunctionCollapse:
                     self.adjacency_rules[pattern2]['right'].add(pattern1)
 
 
-    def get_pattern(self, x, y):
+    def get_pattern(self, x, y, height, width, image):
         """Get a pattern from the input image, considering wrapping."""
         pattern = np.full(self.pattern_size, fill_value=self.nan_value, dtype=float)
         for dy in range(self.pattern_size[0]):
-            if not self.wrap and (y + dy >= self.input_size[0]):
+            if not self.wrap and (y + dy >= height):
                 break
             for dx in range(self.pattern_size[1]):
-                if not self.wrap and (x + dx >= self.input_size[1]):
+                if not self.wrap and (x + dx >= width):
                     break
 
-                pattern[dy, dx,...] = self.input_image[(y + dy) % self.input_size[0], (x + dx) % self.input_size[1], ...]
+                pattern[dy, dx,...] = image[(y + dy) % height, (x + dx) % width, ...]
                 # pattern[dy, dx] = self.input_image[(y + dy), (x + dx)]
 
         return pattern
@@ -262,7 +283,7 @@ class WaveFunctionCollapse:
                 self.propagate()
 
             # Construct the final output image
-            final_image = np.zeros(self.grid_size, dtype=self.input_image.dtype)
+            final_image = np.zeros(self.grid_size)
             for y in range(self.grid_size[0]):
                 for x in range(self.grid_size[1]):
                     pattern = self.output_grid[y, x]
@@ -279,25 +300,22 @@ class WaveFunctionCollapse:
 
 
 class WaveFunctionCollapseVisualizer:
-    def __init__(self, grid_size, observations, pattern_to_number, pattern_size, adjacency_rules, plot_args={}, cmap=None):
-        self.pattern_size = pattern_size
+    def __init__(self, wfc: WaveFunctionCollapse, plot_args={}, cmap=None):
+        self.wfc =wfc
         self.grid_size = grid_size
-        self.observations = observations
-        self.pattern_to_number = pattern_to_number
         if cmap is not None:
             self.custom_colormap = cmap
         else:
             self.custom_colormap = 'terrain'
-        self.adjacency_rules = adjacency_rules  # Adjacency rules: a dictionary
         self.plot_args = plot_args
         
     def plot_observations(self):
-        n = len(self.observations)
+        n = len(self.wfc.observations)
         fig, axes = plt.subplots(n,1, figsize=(20, n* 4))
         if n == 1:
             axes = [axes]  # Handle the case where n=1
 
-        for idx, observation in enumerate(self.observations):
+        for idx, observation in enumerate(self.wfc.observations):
             ax = axes[idx]
             grid = np.zeros(self.grid_size, dtype=object)
 
@@ -305,7 +323,7 @@ class WaveFunctionCollapseVisualizer:
             for i in range(self.grid_size[0]):
                 for j in range(self.grid_size[1]):
                     patterns = observation[i][j]
-                    grid[i, j] = ','.join(str(self.pattern_to_number[p]) for p in patterns)
+                    grid[i, j] = ','.join(str(self.wfc.pattern_to_number[p]) for p in patterns)
 
             # Plot the grid
             ax.set_xticks(np.arange(0, self.grid_size[1] + 1) - 0.5, minor=True)
@@ -324,7 +342,7 @@ class WaveFunctionCollapseVisualizer:
         plt.show()
     
     def visualize_patterns(self, n_max=None):
-        unique_patterns = list(self.pattern_to_number.keys())
+        unique_patterns = list(self.wfc.pattern_to_number.keys())
         if n_max is None:
             n = len(unique_patterns)
         else:
@@ -337,29 +355,30 @@ class WaveFunctionCollapseVisualizer:
         for idx in range(n):
             pattern = unique_patterns[idx]
             ax = axes[idx]
-            pattern_array = np.array(pattern).reshape(*self.pattern_size)  # Assuming patterns can be represented as 2D arrays
-            if len(self.pattern_size) == 3:
+            pattern_array = np.array(pattern).reshape(*self.wfc.pattern_size)  # Assuming patterns can be represented as 2D arrays
+            if self.wfc.channels_per_image == 2:
                 Z = slopes_to_height(pattern_array[..., 0], pattern_array[..., 1])
-            else:
+            elif self.wfc.channels_per_image == 1:
                 Z = pattern_array
             ax.imshow(Z, cmap=self.custom_colormap, interpolation="nearest", **self.plot_args)
                
             ax.axis('off')  # Turn off the axis
-            ax.set_title(f"Pattern {self.pattern_to_number[pattern]}")
-            for i in range(self.pattern_size[0]):
-                for j in range(self.pattern_size[1]):
-                    if len(pattern_array[i, j,...]) == 2:
+            ax.set_title(f"Pattern {self.wfc.pattern_to_number[pattern]}")
+            for i in range(self.wfc.pattern_size[0]):
+                for j in range(self.wfc.pattern_size[1]):
+                    if self.wfc.channels_per_image == 2:
                         ax.text(j, i, int(pattern_array[i, j,0]), ha='left', va='center', fontsize=32, color='black')
                         ax.text(j, i, int(pattern_array[i, j,1]), ha='right', va='center', fontsize=32, color='black')
-                    elif len(pattern_array[i, j,...]) == 1:
+                    elif self.wfc.channels_per_image == 1:
                         ax.text(j, i, int(pattern_array[i, j]), ha='center', va='center', fontsize=32, color='black')
+                        
             # ax.text(0, 0, self.pattern_to_number[pattern], ha='center', va='center', fontsize=32, color='black')
             
         plt.tight_layout()
         plt.show()
         
     def visualize_adjacency(self, pattern):
-        pattern_number = self.pattern_to_number[pattern]
+        pattern_number = self.wfc.pattern_to_number[pattern]
 
         # Initialize a dynamic grid to accommodate multiple adjacent patterns
         # For now, start with 3x3 and expand as necessary
@@ -372,8 +391,8 @@ class WaveFunctionCollapseVisualizer:
         right_patterns = []
         
         # Get adjacency rules for this pattern (if they exist)
-        if pattern in self.adjacency_rules:
-            rules = self.adjacency_rules[pattern]
+        if pattern in self.wfc.adjacency_rules:
+            rules = self.wfc.adjacency_rules[pattern]
             # Collect all patterns for each direction
             if 'above' in rules:
                 above_patterns.extend(rules['above'])
@@ -411,18 +430,19 @@ class WaveFunctionCollapseVisualizer:
         place_patterns(right_patterns, center_row, center_col + 1, 0, 1)
         
         fig, ax = plt.subplots(grid_rows, grid_cols, figsize=(6, 6))
-
+        if grid_cols == 1 and grid_rows == 1:
+            ax = np.array(ax).reshape(grid_rows, grid_cols)
         # Plot all patterns in the grid
         for i in range(grid_rows):
             for j in range(grid_cols):
                 if i == center_row or j == center_col:
-                    pattern_array = np.array(grid[i, j]).reshape(*self.pattern_size)
+                    pattern_array = np.array(grid[i, j]).reshape(*self.wfc.pattern_size)
                     ax[i,j].grid(which="minor", color="black", linestyle='-', linewidth=1.5)
                     ax[i,j].tick_params(which="minor", size=0)
                     ax[i,j].axis('off')  # Turn off the axis
-                    if len(self.pattern_size) == 3:
+                    if self.wfc.channels_per_image == 2:
                         Z = slopes_to_height(pattern_array[..., 0], pattern_array[..., 1])
-                    else:
+                    elif self.wfc.channels_per_image == 1:
                         Z = pattern_array
                         
                     ax[i,j].imshow(Z, cmap=self.custom_colormap, **self.plot_args,
@@ -432,7 +452,7 @@ class WaveFunctionCollapseVisualizer:
                     ax[i,j].set_xticks(np.arange(-0.5, grid_cols), minor=True)
                     ax[i,j].set_yticks(np.arange(-0.5, grid_rows), minor=True)
 
-                    ax[i,j].text(0, 0, self.pattern_to_number[tuple(grid[i, j])], ha='center', va='center', fontsize=10, color='black')
+                    ax[i,j].text(0, 0, self.wfc.pattern_to_number[tuple(grid[i, j])], ha='center', va='center', fontsize=10, color='black')
                 else:
                     ax[i,j].tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labelleft=False)
                     ax[i,j].axis('off')  # Turn off the axis
@@ -450,15 +470,20 @@ if __name__ == "__main__":
                 [0,1,2,1],
                 [0,1,1,1]]
     
-    input_image = np.dstack((input_image, input_image))
-    pattern_size=np.array([2,2,2])
-    grid_size = (12,12,2)
+    # input_image = np.dstack((input_image, input_image))
+    input_images = [input_image]
+    pattern_size=np.array([2,2,1])
+    grid_size = (12,12,1)
     
     # grid_size = (12,12)
     # pattern_size=np.array([2,2])#,2])
+    input_images = augment_images(input_images)
+    for im in input_images:
+        sns.heatmap(im, annot=True)
+        plt.show()
     
-    
-    wfc = WaveFunctionCollapse(input_image, pattern_size=pattern_size, grid_size=grid_size)
+    wfc = WaveFunctionCollapse(input_images, pattern_size=pattern_size, wrap_input=False)
+    wfc.match_patterns()
     output_image = wfc.run(grid_size)
     print(output_image)
     
@@ -472,10 +497,15 @@ if __name__ == "__main__":
         vmin=0,
         vmax=2
     )
-    visualizer = WaveFunctionCollapseVisualizer(grid_size=grid_size, observations=observations, pattern_to_number=pattern_to_number, pattern_size=pattern_size, adjacency_rules=wfc.adjacency_rules, plot_args=plot_args)
+    visualizer = WaveFunctionCollapseVisualizer(wfc, plot_args=plot_args)
     # visualizer.plot_observations()
     visualizer.visualize_patterns(n_max=10)
     # for pat in wfc.patterns:
     visualizer.visualize_adjacency(next(iter(wfc.patterns)))
+    try:
+        sns.heatmap(output_image[..., 0], annot=True)
+        plt.show()
+    except:
+        pass
 
 
