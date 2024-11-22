@@ -15,10 +15,10 @@ class NoWFCSolution(Exception):
         
         
 class WaveFunctionCollapse:
-    def __init__(self, input_images, pattern_size, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1, augment_patterns=False, max_runs=25):
+    def __init__(self, input_images: list, pattern_size, wrap_input=False, random_seed=0, nan_value=-32607.0, remove_low_freq=False, low_freq=1, augment_patterns=False, max_runs=25):
         self.random_seed = random_seed
-        self.input_images = np.dstack(input_images)
         self.n_images = len(input_images)
+        self.input_images = np.dstack(input_images)
         if len(np.array(input_images[0]).shape) == 2:
             self.channels_per_image = 1
         else:
@@ -282,6 +282,7 @@ class WaveFunctionCollapse:
         except NoWFCSolution:
             if self.n_runs >= self.max_runs:
                 print("No Solution Found, Giving Up!")
+                self.n_runs = 0
                 return np.zeros(self.grid_size)
             print("No Solution Found, Retrying...")
             self.observations = []

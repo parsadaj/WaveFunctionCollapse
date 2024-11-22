@@ -35,7 +35,7 @@ for sample_data_path in glob.glob("data/*.hgt"):#["data/N30E054.hgt", "data/N31E
             resampling=rasterio.enums.Resampling.bilinear  # Choose the resampling method
         ).astype(float)[250:350, 200:300]]
         
-    sample_data = augment_images(sample_data)
+    sample_data = augment_images(sample_data, rot90=False, rot180=False, rot270=False, flip_h=True, flip_v=True)
     print("data path: ", sample_data_path)
 
     slopes = []
@@ -57,7 +57,6 @@ for sample_data_path in glob.glob("data/*.hgt"):#["data/N30E054.hgt", "data/N31E
         # WFC Extraction
         slope = np.concatenate([grad_x[:-1, ..., np.newaxis], grad_y[..., :-1, np.newaxis]], axis=2)
         slopes.append(slope)
-    slopes = np.dstack(slopes)
 
     dirname = os.path.splitext(os.path.basename(sample_data_path))[0]
     os.makedirs(f"{save_path}/{dirname}", exist_ok=True)
