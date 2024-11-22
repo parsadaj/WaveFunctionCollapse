@@ -74,9 +74,15 @@ def save_state(obj, filename):
     while os.path.exists(filename):
         filename = f"{base_name}_{counter}{ext}"
         counter += 1
-
-    with open(filename, 'wb') as file:
-        pickle.dump(obj, file)
+     
+    if ext == '.pkl':
+        with open(filename, 'wb') as file:
+            pickle.dump(obj, file)
+    elif ext == '.npy':
+        np.save(filename, obj)
+    else:
+        raise
+    
     print(f"State saved to: {filename}")
     
 

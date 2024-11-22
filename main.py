@@ -19,7 +19,12 @@ import glob
 # save_path = "./results/run"
 save_path = "./results/run_multi_input"
 
-for sample_data_path in glob.glob("data/*.hgt"):#["data/N30E054.hgt", "data/N31E051.hgt", "data/N35E047.hgt"]:
+hgt_list = glob.glob("data/*.hgt")
+# hgt_list = [hhh for hhh in hgt_list if os.path.basename(hhh).startswith("N30")]
+
+n_max = 2
+
+for sample_data_path in hgt_list:#["data/N30E054.hgt", "data/N31E051.hgt", "data/N35E047.hgt"]:
     scale_factor = 1.0 / 8
 
 
@@ -73,9 +78,9 @@ for sample_data_path in glob.glob("data/*.hgt"):#["data/N30E054.hgt", "data/N31E
     # running WFC
     n_out = 0
     try:
-        while n_out < 2:
+        while n_out < n_max:
             output_image = wfc_terrain.run(grid_size=((20, 20, 2)))
-            np.save(os.path.join(save_path, dirname, f"wfc_out_{n_out+1}.npy"), output_image)
+            save_state(output_image, os.path.join(save_path, dirname, f"wfc_out_{n_out+1}.npy"))
             n_out += 1
     except AttributeError:
         print("WFC version conflict. try creating the WFC object from beginning.")
