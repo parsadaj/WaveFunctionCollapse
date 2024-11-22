@@ -75,7 +75,7 @@ for sample_data_path in glob.glob("data/*.hgt"):#["data/N30E054.hgt", "data/N31E
     try:
         while n_out < 2:
             output_image = wfc_terrain.run(grid_size=((20, 20, 2)))
-            save_state(output_image, os.path.join(save_path, dirname, f"wfc_out_{n_out+1}.pkl"))
+            np.save(os.path.join(save_path, dirname, f"wfc_out_{n_out+1}.npy"), output_image)
             n_out += 1
     except AttributeError:
         print("WFC version conflict. try creating the WFC object from beginning.")
