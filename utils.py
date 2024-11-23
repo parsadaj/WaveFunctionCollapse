@@ -66,14 +66,15 @@ def read_hgt(filename):
         return elevation_data
 
 
-def save_state(obj, filename):
+def save_state(obj, filename, overwrite=False):
     base_name, ext = os.path.splitext(filename)
-    counter = 1
-
-    # Increment the filename until a non-existing one is found
-    while os.path.exists(filename):
-        filename = f"{base_name}_{counter}{ext}"
-        counter += 1
+    
+    if overwrite == False:
+        counter = 1
+        # Increment the filename until a non-existing one is found
+        while os.path.exists(filename):
+            filename = f"{base_name}_{counter}{ext}"
+            counter += 1
      
     if ext == '.pkl':
         with open(filename, 'wb') as file:
@@ -82,7 +83,7 @@ def save_state(obj, filename):
         np.save(filename, obj)
     elif ext == '.json':
         with open(filename, 'w') as file:
-            json.dump(obj, file, indent=4)  # Pretty print with indentation
+            json.dump(obj, file)
     else:
         raise ValueError(f"Unsupported file extension: {ext}")
         
@@ -98,7 +99,7 @@ def load_state(filename):
     elif ext == '.npy':
         return np.load(filename)
     elif ext == '.json':
-        with open(filename, 'w') as file:
+        with open(filename, 'rb') as file:
             return json.load(file)  # Pretty print with indentation
     else:
         raise ValueError(f"Unsupported file extension: {ext}")

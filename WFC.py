@@ -287,15 +287,27 @@ class WaveFunctionCollapse:
             return self.run(grid_size)
     
     def save(self, save_path, overwrite=True):
-        save_state(self.pattern_frequencies, os.path.join(save_path, 'patterns.json'), overwrite=overwrite)
-        save_state(self.adjacency_rules, os.path.join(save_path, 'adjacency.json'), overwrite=overwrite)
-        save_state(self.pattern_to_number, os.path.join(save_path, 'pattern_to_number.json'), overwrite=overwrite)
+        pattern_freqs = {str(pat): f for pat, f in self.pattern_frequencies.items()}
+        save_state(pattern_freqs, os.path.join(save_path, 'patterns.json'), overwrite=overwrite)
+        
+        adj = {str(pat): {neigbor_loc: [list(tup) for tup in set_of_pats] for neigbor_loc, set_of_pats in defdict.items()} for pat, defdict in self.adjacency_rules.items()}
+        save_state(adj, os.path.join(save_path, 'adjacency.json'), overwrite=overwrite)
+        
+        pattern_to_number = {str(pat): i for pat, i in self.pattern_to_number.items()}
+        save_state(pattern_to_number, os.path.join(save_path, 'pattern_to_number.json'), overwrite=overwrite)
 
     def load(self, save_path):
-        self.pattern_frequencies = load_state(os.path.join(save_path, 'patterns.json'))
-        self.adjacency_rules = load_state(os.path.join(save_path, 'adjacency.json'))
-        self.pattern_to_number = load_state(self.pattern_to_number, os.path.join(save_path, 'pattern_to_number.json'))
+        pattern_freqs = load_state(os.path.join(save_path, 'patterns.json'))
+        self.pattern_frequencies = {eval(pat): f for pat, f in pattern_freqs.items()}
+        
+        adj = load_state(os.path.join(save_path, 'adjacency.json'))
+        self.adjacency_rules = {eval(pat): {neigbor_loc: {tuple(tup) for tup in set_of_pats} for neigbor_loc, set_of_pats in defdict.items()} for pat, defdict in adj.items()}
+
+        
+        pat2num = load_state(os.path.join(save_path, 'pattern_to_number.json'))
+        self.pattern_to_number = {eval(pat): i for pat, i in pat2num.items()}
         self.number_to_pattern = {v:k for k,v in self.pattern_to_number.items()}
+        
         if self.remove_low_freq:
             self.patterns = [k for k in self.pattern_frequencies.keys() if self.pattern_frequencies[k] > self.low_freq] 
         else:
