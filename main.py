@@ -64,15 +64,19 @@ for sample_data_path in hgt_list:#["data/N30E054.hgt", "data/N31E051.hgt", "data
         slopes.append(slope)
 
     dirname = os.path.splitext(os.path.basename(sample_data_path))[0]
-    os.makedirs(f"{save_path}/{dirname}", exist_ok=True)
-    saved_wfc_path = os.path.join(save_path, dirname, "wfc_state.pkl")
     
-    if os.path.exists(saved_wfc_path):
+    saved_wfc_path = os.path.join(save_path, dirname, "wfc_state")
+    wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), remove_low_freq=False, low_freq=1)
+
+    if os.path.exists():
+        wfc_terrain.load(saved_wfc_path)
+    elif os.path.exists(saved_wfc_path + '.pkl'):
         print("Found existing wfc...")
         wfc_terrain = load_state(saved_wfc_path)
     else:
-        wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), remove_low_freq=False, low_freq=1)
+        wfc_terrain.extract_patterns()
         wfc_terrain.match_patterns()
+        os.makedirs(saved_wfc_path, exist_ok=True)
         save_state(wfc_terrain, saved_wfc_path)
 
     # running WFC

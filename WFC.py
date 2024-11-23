@@ -4,10 +4,10 @@ import random
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from tqdm import tqdm
-from functions import slopes_to_height
-from utils import default_dict_of_sets
+from functions import slopes_to_height, augment_images
+from utils import default_dict_of_sets, save_state, load_state
 import seaborn as sns
-
+import os
 
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):
@@ -46,8 +46,6 @@ class WaveFunctionCollapse:
         self.n_runs = 0
         self.max_runs = max_runs
         
-        self.extract_patterns()
-
         
 
     def generate_pattern_mappings(self):
@@ -287,7 +285,21 @@ class WaveFunctionCollapse:
             print("No Solution Found, Retrying...")
             self.observations = []
             return self.run(grid_size)
+    
+    def save(self, save_path, overwrite=True):
+        save_state(self.pattern_frequencies, os.path.join(save_path, 'patterns.json'), overwrite=overwrite)
+        save_state(self.adjacency_rules, os.path.join(save_path, 'adjacency.json'), overwrite=overwrite)
+        save_state(self.pattern_to_number, os.path.join(save_path, 'pattern_to_number.json'), overwrite=overwrite)
 
+    def load(self, save_path):
+        self.pattern_frequencies = load_state(os.path.join(save_path, 'patterns.json'))
+        self.adjacency_rules = load_state(os.path.join(save_path, 'adjacency.json'))
+        self.pattern_to_number = load_state(self.pattern_to_number, os.path.join(save_path, 'pattern_to_number.json'))
+        self.number_to_pattern = {v:k for k,v in self.pattern_to_number.items()}
+        if self.remove_low_freq:
+            self.patterns = [k for k in self.pattern_frequencies.keys() if self.pattern_frequencies[k] > self.low_freq] 
+        else:
+            self.patterns = list(self.pattern_frequencies.keys())
 
 class WaveFunctionCollapseVisualizer:
     def __init__(self, wfc: WaveFunctionCollapse, plot_args={}, cmap=None):

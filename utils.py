@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 from collections import defaultdict
 import os
-
+import json
 
 def visualize_terrain(terrain, cmap='terrain'):
     """
@@ -80,15 +80,31 @@ def save_state(obj, filename):
             pickle.dump(obj, file)
     elif ext == '.npy':
         np.save(filename, obj)
+    elif ext == '.json':
+        with open(filename, 'w') as file:
+            json.dump(obj, file, indent=4)  # Pretty print with indentation
     else:
-        raise
-    
+        raise ValueError(f"Unsupported file extension: {ext}")
+        
     print(f"State saved to: {filename}")
     
 
 def load_state(filename):
-    with open(filename, 'rb') as file:
-        return pickle.load(file)
+    base_name, ext = os.path.splitext(filename)
+         
+    if ext == '.pkl':
+        with open(filename, 'rb') as file:
+            return pickle.load(file)
+    elif ext == '.npy':
+        return np.load(filename)
+    elif ext == '.json':
+        with open(filename, 'w') as file:
+            return json.load(file)  # Pretty print with indentation
+    else:
+        raise ValueError(f"Unsupported file extension: {ext}")
+        
+    print(f"Loaded: {filename}")
+
     
 def default_dict_of_sets():
     return defaultdict(set)
