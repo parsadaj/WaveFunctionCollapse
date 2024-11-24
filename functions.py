@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy
 
-def slopes_to_height(grad_x, grad_y):
+def slopes_to_height(grad_x, grad_y, pad=0, nan_value=-32767):
     # # Integrate the x-gradient along the x direction
     # height_map_x = np.cumsum(grad_x, axis=1)
 
@@ -17,16 +17,17 @@ def slopes_to_height(grad_x, grad_y):
 
     # height_map_x.shape, height_map_y.shape
 
-
-    hh = np.zeros((
-        grad_x.shape[0],
-        grad_y.shape[1]
-    ))
-
+    hh = np.full((
+        grad_x.shape[0] + pad,
+        grad_y.shape[1] + pad),
+        fill_value=nan_value
+    )
+        
+        
     failed = False
-    for y in range(hh.shape[0]):
-        for x in range(hh.shape[1]):
-            
+    for y in range(hh.shape[0]-pad):
+        for x in range(hh.shape[1]-pad):
+        
             if x == 0 and y == 0:
                 hh[y, x] = 0
                 continue
@@ -40,6 +41,7 @@ def slopes_to_height(grad_x, grad_y):
                 continue
                 
             if y > 0 and x > 0:
+                    
                 hy = hh[y-1, x] + grad_y[y-1, x]
                 hx = hh[y, x-1] + grad_x[y, x-1]
                 
@@ -48,6 +50,7 @@ def slopes_to_height(grad_x, grad_y):
                 else:
                     failed = True
                     hh[y, x] = (hx + hy) / 2
+
             
             # if x == 0 and y < hh.shape[0]-1:
             #     hh[y+1, x] = hh[y,x] + grad_y[y,x]
@@ -59,8 +62,16 @@ def slopes_to_height(grad_x, grad_y):
             #     hh[x,y+1] = hh[x,y] + grad_x[x,y]
             #     print(x,y+1)
 
+    if pad:
+        for y in range(hh.shape[0]-pad):
+                x = hh.shape[0] - pad
+                hh[y, x] = hh[y, x-1] + grad_x[y, x-1]
         
-    #hh[-1, :] = hh[-2,:] + grad_y[-1,:]
+        for x in range(hh.shape[1]-pad):
+                y = hh.shape[0] - pad
+                hh[y, x] = hh[y-1, x] + grad_y[y-1, x]
+
+        #hh[-1, :] = hh[-2,:] + grad_y[-1,:]
     if failed:
         print("Conflict in Reconstruction. Averaged the grad values")
     return hh
