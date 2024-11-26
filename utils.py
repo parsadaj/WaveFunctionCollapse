@@ -42,7 +42,7 @@ def visualize_3d_terrain(terrain, cmap='terrain', elev=45, azim=45, x_scale=30, 
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-
+    
     ax.view_init(elev=elev, azim=azim)
     plt.show()
     
