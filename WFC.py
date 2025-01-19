@@ -1,5 +1,6 @@
 import numpy as np
 from collections import defaultdict
+from enum import Enum
 import random
 import matplotlib.pyplot as plt
 from copy import deepcopy
@@ -9,6 +10,10 @@ from utils import default_dict_of_sets, save_state, load_state
 import seaborn as sns
 import os
 
+class observe_mode(Enum):
+    MB = 0
+    RANDOM = 1
+    
 class NoWFCSolution(Exception):
     def __init__(self, message="No WFC solutions Found!"):
         super().__init__(message)
@@ -44,6 +49,8 @@ class WaveFunctionCollapse:
         self.low_freq =low_freq
         self.augment_patterns = augment_patterns
         self.n_runs = 0
+        self.n_runs_on_block = 0
+
         self.max_runs = max_runs
         
         
@@ -173,41 +180,50 @@ class WaveFunctionCollapse:
         self.possible_patterns = [[None for _ in range(self.grid_size[1])]
                                   for _ in tqdm(range(self.grid_size[0]), desc="Initializing Grid")]
 
-    def observe(self):
-        """Select the most constrained cell and collapse its wave function."""
-        min_entropy = float('inf')
-        chosen_cell = None
-        chosen_cells = []
+    def observe(self, mode=observe_mode.RANDOM, chosen_cell=None):
+        """Select the most constrained cell and collapse its wave function.
+        parameters:
+            mode (int): 0 for Modifying Blocks, 1 for Random,
+                observe_mode.MB for modifying blocks, observe_mode.RANDOM for random
+            chosen_cell: only applicable when using observe_mode.MB or when one wants to observe a specific cell
         
-        self.observations.append(deepcopy(self.possible_patterns))
-        attempt = len(self.observations)
-        
-        # Find the cell with the least possibilities (highest constraint)
-        # for y in tqdm(range(self.grid_size[0]), desc=f"Observation number {attempt}", miniters=20):
-        for y in range(self.grid_size[0]):
-            for x in range(self.grid_size[1]):
-                if self.output_grid[y, x] is None:
-                    entropy = self.get_entropy(self.possible_patterns[y][x])
-                    if entropy < min_entropy:
-                        min_entropy = entropy
-                        chosen_cell = (y, x)
-                        chosen_cells.append(chosen_cell)
-                    elif entropy == min_entropy:
-                        chosen_cell = (y, x)
-                        chosen_cells.append(chosen_cell)
+        """
+        if mode == observe_mode.RANDOM:
+            min_entropy = float('inf')
+            chosen_cell = None
+            chosen_cells = []
+            
+            self.observations.append(deepcopy(self.possible_patterns))
+            attempt = len(self.observations)
+            
+            # Find the cell with the least possibilities (highest constraint)
+            # for y in tqdm(range(self.grid_size[0]), desc=f"Observation number {attempt}", miniters=20):
+            for y in range(self.grid_size[0]):
+                for x in range(self.grid_size[1]):
+                    if self.output_grid[y, x] is None:
+                        entropy = self.get_entropy(self.possible_patterns[y][x])
+                        if entropy < min_entropy:
+                            min_entropy = entropy
+                            chosen_cell = (y, x)
+                            chosen_cells.append(chosen_cell)
+                        elif entropy == min_entropy:
+                            chosen_cell = (y, x)
+                            chosen_cells.append(chosen_cell)
                         
-        if chosen_cell is None or len(chosen_cells) == 0:
-            return False  # All cells are filled
+            if chosen_cell is None or len(chosen_cells) == 0:
+                return False  # All cells are filled
 
-        if min_entropy == 0:
-            raise NoWFCSolution
-        
-        chosen_cell = random.choice(chosen_cells)
+            if min_entropy == 0:
+                raise NoWFCSolution
+            
+            chosen_cell = random.choice(chosen_cells)
         
         y, x = chosen_cell
-        # Randomly select a pattern weighted by its frequency
         
+        # Randomly select a pattern weighted by its frequency
         if self.possible_patterns[y][x] is not None:
+            if len(self.possible_patterns[y][x]) == 0:
+                raise NoWFCSolution
             pattern = random.choices(
                 list(self.possible_patterns[y][x]),
                 weights=[self.pattern_frequencies[pat] for pat in self.possible_patterns[y][x]],
@@ -257,35 +273,82 @@ class WaveFunctionCollapse:
                                     self.possible_patterns[ny][nx] = valid_patterns
                                     changes = True
 
-    def run(self, grid_size):
+    def run(self, grid_size, mode=observe_mode.RANDOM, block_size=10, stride=8):
         self.grid_size = grid_size
         self.n_runs += 1
+        
+        if mode==observe_mode.MB:
+            if type(block_size) is int:
+                block_size = (block_size, block_size)
+            if type(stride) is int:
+                stride = (stride, stride)
+        
+        self.initialize_output_grid()
+        
+        if mode==observe_mode.RANDOM:
+            try:
+                """Run the WFC algorithm until the grid is fully populated."""
+                while True:
+                    if not self.observe(mode=mode):
+                        break
+                    self.propagate()
+                            
+            except NoWFCSolution:
+                if self.n_runs >= self.max_runs:
+                    print("No Solution Found, Giving Up!")
+                    self.n_runs = 0
+                    return np.zeros(self.grid_size)
+                print("No Solution Found, Retrying...")
+                self.observations = []
+                return self.run(grid_size)            
+                
+        elif mode==observe_mode.MB:
+            for i in range(0, grid_size[0], stride[0]):
+                for j in range(0, grid_size[1], stride[1]):
+                    try:
+                        self.observe_block(i, j, block_size, grid_size, mode)
+                    except NoWFCSolution:
+                        if self.n_runs >= self.max_runs:
+                            print("No Solution Found, Giving Up!")
+                            self.n_runs = 0
+                            return np.zeros(self.grid_size)
+                        print("No Solution Found, Retrying...")
+                        self.observations = []
+                        return self.run(grid_size, mode, block_size, stride)
+
+        # Construct the final output image
+        final_image = np.zeros(self.grid_size)
+        for y in range(self.grid_size[0]):
+            for x in range(self.grid_size[1]):
+                pattern = self.output_grid[y, x]
+                final_image[y, x, ...] = np.array(pattern).reshape(*self.pattern_size)[0, 0]
+
+        return final_image
+  
+    def observe_block(self, i, j, block_size, grid_size, mode):
         try:
-            """Run the WFC algorithm until the grid is fully populated."""
-            self.initialize_output_grid()
-
-            while True:
-                if not self.observe():
-                    break
-                self.propagate()
-
-            # Construct the final output image
-            final_image = np.zeros(self.grid_size)
-            for y in range(self.grid_size[0]):
-                for x in range(self.grid_size[1]):
-                    pattern = self.output_grid[y, x]
-                    final_image[y, x, ...] = np.array(pattern).reshape(*self.pattern_size)[0, 0]
-
-            return final_image
+            for y in range(i, i+block_size[0]):
+                for x in range(j, j+block_size[1]):
+                    if y >= grid_size[0] or x >= grid_size[1]:
+                        continue
+                    cell = (y, x)
+                    self.observe(mode, cell)
+                    if self.output_grid[y, x] is None:
+                        raise
+                    self.propagate()
         except NoWFCSolution:
-            if self.n_runs >= self.max_runs:
-                print("No Solution Found, Giving Up!")
-                self.n_runs = 0
-                return np.zeros(self.grid_size)
-            print("No Solution Found, Retrying...")
-            self.observations = []
-            return self.run(grid_size)
-    
+            if self.n_runs_on_block >= self.max_runs:
+                print("No Solution Found, Giving Up on this Block!")
+                self.n_runs_on_block = 0
+                raise NoWFCSolution                
+            
+            print("No Solution Found, Retrying this Block...")
+            self.n_runs_on_block += 1
+            self.observe_block(i, j, block_size, grid_size, mode)
+            
+        self.n_runs_on_block = 0
+        return True
+ 
     def save(self, save_path, overwrite=True):
         pattern_freqs = {str(pat): f for pat, f in self.pattern_frequencies.items()}
         save_state(pattern_freqs, os.path.join(save_path, 'patterns.json'), overwrite=overwrite)
@@ -297,11 +360,18 @@ class WaveFunctionCollapse:
         save_state(pattern_to_number, os.path.join(save_path, 'pattern_to_number.json'), overwrite=overwrite)
 
     def load(self, save_path):
+       
         pattern_freqs = load_state(os.path.join(save_path, 'patterns.json'))
-        self.pattern_frequencies = {eval(pat): f for pat, f in pattern_freqs.items()}
+        self.pattern_frequencies = defaultdict(int, {eval(pat): f for pat, f in pattern_freqs.items()})
         
         adj = load_state(os.path.join(save_path, 'adjacency.json'))
-        self.adjacency_rules = {eval(pat): {neigbor_loc: {tuple(tup) for tup in set_of_pats} for neigbor_loc, set_of_pats in defdict.items()} for pat, defdict in adj.items()}
+        self.adjacency_rules = defaultdict(default_dict_of_sets)
+        # Now fill the self.adjacency_rules with the data from `adj`
+        for pat, defdict in adj.items():
+            for neigbor_loc, set_of_pats in defdict.items():
+                # The key 'pat' is the outer key, and 'neigbor_loc' is the inner key
+                # We add the set of tuples to the appropriate set in the defaultdict structure
+                self.adjacency_rules[eval(pat)][neigbor_loc] = {tuple(tup) for tup in set_of_pats}
 
         
         pat2num = load_state(os.path.join(save_path, 'pattern_to_number.json'))

@@ -4,7 +4,7 @@
 import numpy as np
 import rasterio
 
-from WFC import WaveFunctionCollapse
+from WFC import WaveFunctionCollapse, observe_mode
 from utils import save_state, load_state
 from functions import height_to_slopes, slopes_to_height, augment_images
 
@@ -69,11 +69,11 @@ for sample_data_path in hgt_list:#["data/N30E054.hgt", "data/N31E051.hgt", "data
     
     wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), remove_low_freq=False, low_freq=1)
 
-    if os.path.exists():
+    if os.path.exists(saved_wfc_path):
         print("Found existing wfc...")
         wfc_terrain.load(saved_wfc_path)
     elif os.path.exists(saved_wfc_path + '.pkl'):
-        print("Found existing wfc...")
+        print("Found existing pkl wfc...")
         wfc_terrain = load_state(saved_wfc_path)
     else:
         wfc_terrain.extract_patterns()
@@ -85,11 +85,13 @@ for sample_data_path in hgt_list:#["data/N30E054.hgt", "data/N31E051.hgt", "data
     n_out = 0
     try:
         while n_out < n_max:
-            output_image = wfc_terrain.run(grid_size=((20, 20, 2)))
-            save_state(output_image, os.path.join(save_path, dirname, f"wfc_out_{n_out+1}.npy"))
+            mode = observe_mode.MB
+            mode_name = "MB" if mode == observe_mode.MB else "RANDOM"
+            output_image = wfc_terrain.run(grid_size=((20, 20, 2)), mode=mode)
+            save_state(output_image, os.path.join(save_path, dirname, f"wfc_out_{n_out+1}_{mode_name}.npy"))
             n_out += 1
     except AttributeError:
-        print("WFC version conflict. try creating the WFC object from beginning.")
+        print("WFC version conflict. try creating the WFC object from the beginning.")
         continue
 
     print(f"done with {dirname}...")
