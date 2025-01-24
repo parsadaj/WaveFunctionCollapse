@@ -1,14 +1,16 @@
-import numpy as np
+import os
 from collections import defaultdict
 from enum import Enum
-import random
-import matplotlib.pyplot as plt
 from copy import deepcopy
+import random
+
+import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from functions import slopes_to_height, augment_images
 from utils import default_dict_of_sets, save_state, load_state
-import seaborn as sns
-import os
 
 class observe_mode(Enum):
     MB = 0
@@ -34,7 +36,7 @@ class WaveFunctionCollapse:
         self.pattern_frequencies = defaultdict(int)
         self.adjacency_rules = defaultdict(default_dict_of_sets)
         
-
+        self.empty_pattern = tuple(np.full(pattern_size, -32767).flatten())
         self.output_grid = None
         self.possible_patterns = None
         self.observations = []
@@ -52,8 +54,7 @@ class WaveFunctionCollapse:
         self.n_runs_on_block = 0
 
         self.max_runs = max_runs
-        
-        
+
 
     def generate_pattern_mappings(self):
         # Generate a dictionary mapping each pattern to a unique number
@@ -96,6 +97,7 @@ class WaveFunctionCollapse:
         else:
             self.patterns = list(self.pattern_frequencies.keys())
         self.pattern_to_number, self.number_to_pattern = self.generate_pattern_mappings()
+        
 
         # # Set up adjacency rules
         # for y in range(height):
@@ -223,12 +225,14 @@ class WaveFunctionCollapse:
         # Randomly select a pattern weighted by its frequency
         if self.possible_patterns[y][x] is not None:
             if len(self.possible_patterns[y][x]) == 0:
-                raise NoWFCSolution
-            pattern = random.choices(
-                list(self.possible_patterns[y][x]),
-                weights=[self.pattern_frequencies[pat] for pat in self.possible_patterns[y][x]],
-                k=1
-            )[0]
+                pattern = self.empty_pattern
+                #raise NoWFCSolution
+            else:
+                pattern = random.choices(
+                    list(self.possible_patterns[y][x]),
+                    #weights=[self.pattern_frequencies[pat] for pat in self.possible_patterns[y][x]],
+                    k=1
+                )[0]
         else:
             pattern = random.choices(
                 self.patterns,
@@ -237,7 +241,6 @@ class WaveFunctionCollapse:
             )[0]
         self.output_grid[y, x] = pattern
         self.possible_patterns[y][x] = {pattern}
-
         return True
 
     def propagate(self):
@@ -251,31 +254,35 @@ class WaveFunctionCollapse:
                         continue
                     if len(self.possible_patterns[y][x]) == 1:
                         pattern = next(iter(self.possible_patterns[y][x]))
-                        for direction, dy, dx in [('above', -1, 0), ('below', 1, 0), ('left', 0, -1), ('right', 0, 1)]:
-                            if not self.wrap and (y + dy >= self.grid_size[0] or x + dx >= self.grid_size[1] or y + dy < 0 or x + dx < 0):
-                                continue
-                            
-                            ny, nx = (y + dy) % self.grid_size[0], (x + dx) % self.grid_size[1]
-                            # ny, nx = (y + dy), (x + dx)
-                            valid_patterns = set()
-                            if self.possible_patterns[ny][nx] is not None:
-                                for neighbor_pattern in self.possible_patterns[ny][nx]:
-                                    if neighbor_pattern in self.adjacency_rules[pattern][direction]:
-                                        valid_patterns.add(neighbor_pattern)
-                                if valid_patterns != self.possible_patterns[ny][nx]:
-                                    self.possible_patterns[ny][nx] = valid_patterns
-                                    changes = True
-                            else:
-                                for neighbor_pattern in self.patterns:
-                                    if neighbor_pattern in self.adjacency_rules[pattern][direction]:
-                                        valid_patterns.add(neighbor_pattern)
-                                if valid_patterns != self.possible_patterns[ny][nx]:
-                                    self.possible_patterns[ny][nx] = valid_patterns
-                                    changes = True
+                        if pattern != self.empty_pattern:
+                            for direction, dy, dx in [('above', -1, 0), ('below', 1, 0), ('left', 0, -1), ('right', 0, 1)]:
+                                if not self.wrap and (y + dy >= self.grid_size[0] or x + dx >= self.grid_size[1] or y + dy < 0 or x + dx < 0):
+                                    continue
+                                
+                                ny, nx = (y + dy) % self.grid_size[0], (x + dx) % self.grid_size[1]
+                                # ny, nx = (y + dy), (x + dx)
+                                valid_patterns = set()
+                                if self.possible_patterns[ny][nx] is not None:
+                                    for neighbor_pattern in self.possible_patterns[ny][nx]:
+                                        if neighbor_pattern in self.adjacency_rules[pattern][direction]:
+                                            valid_patterns.add(neighbor_pattern)
+                                    if valid_patterns != self.possible_patterns[ny][nx]:
+                                        self.possible_patterns[ny][nx] = valid_patterns
+                                        changes = True
+                                else:
+                                    for neighbor_pattern in self.patterns:
+                                        if neighbor_pattern in self.adjacency_rules[pattern][direction]:
+                                            valid_patterns.add(neighbor_pattern)
+                                    if valid_patterns != self.possible_patterns[ny][nx]:
+                                        self.possible_patterns[ny][nx] = valid_patterns
+                                        changes = True
 
     def run(self, grid_size, mode=observe_mode.RANDOM, block_size=10, stride=8):
         self.grid_size = grid_size
         self.n_runs += 1
+        
+        if self.empty_pattern is None:
+            self.empty_pattern = len(self.patterns)
         
         if mode==observe_mode.MB:
             if type(block_size) is int:
@@ -294,6 +301,7 @@ class WaveFunctionCollapse:
                     self.propagate()
                             
             except NoWFCSolution:
+    
                 if self.n_runs >= self.max_runs:
                     print("No Solution Found, Giving Up!")
                     self.n_runs = 0
@@ -318,10 +326,41 @@ class WaveFunctionCollapse:
 
         # Construct the final output image
         final_image = np.zeros(self.grid_size)
+        self.gosal_image = np.zeros(self.grid_size[0:2])
         for y in range(self.grid_size[0]):
             for x in range(self.grid_size[1]):
                 pattern = self.output_grid[y, x]
-                final_image[y, x, ...] = np.array(pattern).reshape(*self.pattern_size)[0, 0]
+                if pattern != self.empty_pattern:
+                    final_image[y, x, ...] = np.array(pattern).reshape(*self.pattern_size)[0, 0]
+                else:
+                    _ = False
+                    pat_y = []
+                    if y > 0:
+                        pat_y.append(np.array(self.output_grid[y-1, x]).reshape(*self.pattern_size)[1, 0, 1]) # Top
+                        if x > 0:
+                            pat_y.append(np.array(self.output_grid[y-1, x-1]).reshape(*self.pattern_size)[1, 1, 1]) # Top Left
+                            pat_y.append(np.array(self.output_grid[y, x-1]).reshape(*self.pattern_size)[0, 1, 1]) # Left
+                    pat_y.append(0)
+                    
+                    for py in pat_y:
+                        if py != -32767:
+                            pattern_y = py
+                            break
+                    
+                    pat_x = []
+                    if x > 0:
+                        pat_x.append(np.array(self.output_grid[y, x-1]).reshape(*self.pattern_size)[0, 1, 0]) # Left
+                        if y > 0:
+                            pat_x.append(np.array(self.output_grid[y-1, x-1]).reshape(*self.pattern_size)[1, 1, 0]) # Top Left
+                            pat_x.append(np.array(self.output_grid[y-1, x]).reshape(*self.pattern_size)[1, 0, 0]) # Top
+                    pat_x.append(0)
+                    
+                    for px in pat_x:
+                        if px != -32767:
+                            pattern_x = px
+                            break
+                    self.gosal_image[y, x] = 1
+                    final_image[y, x, ...] = np.array([pattern_y, pattern_x])
 
         return final_image
   

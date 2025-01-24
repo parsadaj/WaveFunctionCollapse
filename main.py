@@ -66,6 +66,8 @@ for sample_data_path in hgt_list:#["data/N30E054.hgt", "data/N31E051.hgt", "data
     dirname = os.path.splitext(os.path.basename(sample_data_path))[0]
     
     saved_wfc_path = os.path.join(save_path, dirname, "wfc_state")
+    outs_path = os.path.join(save_path, dirname, "outs")
+    os.makedirs(outs_path, exist_ok=True)
     
     wfc_terrain = WaveFunctionCollapse(slopes, (2,2,2), remove_low_freq=False, low_freq=1)
 
@@ -88,7 +90,9 @@ for sample_data_path in hgt_list:#["data/N30E054.hgt", "data/N31E051.hgt", "data
             mode = observe_mode.MB
             mode_name = "MB" if mode == observe_mode.MB else "RANDOM"
             output_image = wfc_terrain.run(grid_size=((20, 20, 2)), mode=mode)
-            save_state(output_image, os.path.join(save_path, dirname, f"wfc_out_{n_out+1}_{mode_name}.npy"))
+            
+            save_state(output_image, os.path.join(save_path, dirname, "outs", f"wfc_out_{n_out+1}_{mode_name}.npy"), overwrite=True)
+            save_state(wfc_terrain.gosal_image, os.path.join(save_path, dirname, "outs", f"wfc_gosal_{n_out+1}_{mode_name}.npy"), overwrite=True)
             n_out += 1
     except AttributeError:
         print("WFC version conflict. try creating the WFC object from the beginning.")
